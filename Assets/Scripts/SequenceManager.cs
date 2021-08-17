@@ -21,8 +21,8 @@ public class SequenceManager : MonoBehaviour
     {
     }
 
-    public void GameClear(){}
-    public void GameOver(){}
-    public void GamePause(){}
+    public void GameClear() { }
+    public void GameOver() { }
+    public void GamePause() { }
 
 }
