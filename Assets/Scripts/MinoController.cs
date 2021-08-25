@@ -18,23 +18,24 @@ namespace Tetris
 
     public class MinoController : MonoBehaviour
     {
-        // ミノの座標周りのパラメータ
-        // J, L, S, T, Zミノの生成位置。中央から1マス左に生成する。
-        private readonly Vector3 kStartingJLSTZMinoPosition = new Vector3(-0.5f, 8.5f, 0f);
-        // I, Oミノの生成位置。中央に生成する。
-        private readonly Vector3 kStartingIOMinoPosition = new Vector3(0f, 9f, 0f);
+        // ミノの座標周りの定数
+        // ミノの生成位置。中心を中央から1マス左の位置になるように生成する。
+        private readonly Vector3 kStartingMinoPosition = new Vector3(-0.5f, 8.5f, 0f);
         // ホールドミノの座標。
         private readonly Vector3 kHoldMinoPosition = new Vector3(-7.5f, -7.0f, 0.0f);
         // ネクストミノの座標。この値にOffsetY * 順番を引いた値が最終的な座標になる。
         private readonly Vector3 kNextMinoPosition = new Vector3(7.5f, 7.5f, 0f);
+        // ネクストミノのy座標オフセット。
         private const float kNextMinoOffsetY = 1.5f;
 
-        // ミノのスケール。生成時は1、ホールド時は0.8にする。
+        // ミノのスケール。生成時は全て1、ホールド時は全て0.8、ネクストミノは全て0.5にする。
         private readonly Vector3 kStartingMinoScale = new Vector3(1.0f, 1.0f, 1.0f);
         private readonly Vector3 kHoldMinoScale = new Vector3(0.8f, 0.8f, 0.8f);
         private readonly Vector3 kNextMinoScale = new Vector3(0.5f, 0.5f, 0.5f);
 
         // ミノオブジェクト周りの変数
+        // ネクストミノの個数
+        private const int kMaxNextMinoSize = 6;
         // 現在フォーカスされているミノ
         private GameObject _currentMino;
         // ホールドされているミノ。最初にホールドされるまではnullオブジェクト。
@@ -43,23 +44,23 @@ namespace Tetris
         private Queue<GameObject> _nextMinos;
         // ネクストミノタイプを保持するキュー。ネクストミノは7種類のミノをランダムに並べたセットを繰り返す。
         private Queue<Tetromino> _nextMinosType;
-
-        private const int kMaxNextMinoSize = 6; // ネクストミノの個数
         // テトリミノの種類一覧
         private Tetromino[] _tetrominos = new Tetromino[] { Tetromino.IMino, Tetromino.JMino, Tetromino.LMino, Tetromino.OMino, Tetromino.SMino, Tetromino.TMino, Tetromino.ZMino };
-
+        // Resourcesフォルダにあるミノプレハブを所持するための配列
         private GameObject[] _minoObjects;
 
-        void Awake()
+        // ホールドをしていいかどうか
+        private bool _canHold = true;
+
+        private void Awake()
         {
             _nextMinos = new Queue<GameObject>();
             _nextMinosType = new Queue<Tetromino>();
         }
 
-        void Start()
+        private void Start()
         {
             _minoObjects = Resources.LoadAll<GameObject>("Tetromino");
-            Debug.Log(_minoObjects[0]);
 
             SetNextMinosType();
             for (int i = 0; i < kMaxNextMinoSize; ++i)
@@ -69,7 +70,9 @@ namespace Tetris
 
             // テトリミノを取得してゲーム開始
             _currentMino = GetNextMino();
-            //_currentMino.GetComponent<MinoBehavior>().StartMoveMino();
+            _currentMino.GetComponent<MinoBehavior>().enabled = true;
+            _currentMino.GetComponent<MinoBehavior>().SetMinoManager(this.gameObject);
+            _currentMino.GetComponent<MinoBehavior>().StartMoveMino();
         }
 
         // 7種類のミノをシャッフルしてネクストミノの順番として保存。
@@ -86,9 +89,7 @@ namespace Tetris
         private void GenerateNextMino()
         {
             Tetromino nextMinoType = _nextMinosType.Dequeue();
-            Debug.Log(nextMinoType);
             GameObject generatedMino = Instantiate(_minoObjects[(int)nextMinoType]);
-            Debug.Log(generatedMino);
             _nextMinos.Enqueue(generatedMino);
             SetNextMinosPosition();
         }
@@ -113,30 +114,43 @@ namespace Tetris
             }
             // ネクストミノの先頭を取得し、末尾に一つ追加する。
             GameObject nextMino = _nextMinos.Dequeue();
-            nextMino.transform.localScale = kStartingMinoScale;
             GenerateNextMino();
 
             // 取得したミノを操作ミノの位置にセット
-            // IミノOミノは他のミノと生成位置が異なる
-            switch (nextMino.GetComponent<MinoBehavior>().minoType)
-            {
-                case Tetromino.IMino:
-                case Tetromino.OMino:
-                    nextMino.transform.position = kStartingIOMinoPosition;
-                    break;
-                case Tetromino.JMino:
-                case Tetromino.LMino:
-                case Tetromino.SMino:
-                case Tetromino.TMino:
-                case Tetromino.ZMino:
-                    nextMino.transform.position = kStartingJLSTZMinoPosition;
-                    break;
-            }
+            nextMino.transform.position = kStartingMinoPosition;
+            nextMino.transform.localScale = kStartingMinoScale;
             return nextMino;
+        }
+
+        // 現在のミノが下まで到着した際に呼ばれる。
+        // 次のミノを取得してゲームを続ける。
+        public void StartNextMino()
+        {
+            // 到着したミノのMinoBehaviorを停止する。
+            _currentMino.GetComponent<MinoBehavior>().enabled = false;
+
+            // ホールドが可能になる
+            _canHold = true;
+
+            // テトリミノを取得して続ける。
+            _currentMino = GetNextMino();
+            _currentMino.GetComponent<MinoBehavior>().enabled = true;
+            _currentMino.GetComponent<MinoBehavior>().SetMinoManager(this.gameObject);
+            _currentMino.GetComponent<MinoBehavior>().StartMoveMino();
+        }
+
+        // ホールドが可能かどうか
+        // 一度ホールドした場合、新しいミノを設置するまではホールド禁止。
+        public bool canHoldMino()
+        {
+            return _canHold;
         }
 
         public void HoldMino()
         {
+            _canHold = false;
+            // 現在のミノはホールドされるのでMinoBehaviorを停止する。
+            _currentMino.GetComponent<MinoBehavior>().enabled = false;
             if (_holdMino == null)
             {
                 _holdMino = _currentMino;
@@ -148,8 +162,10 @@ namespace Tetris
                 _currentMino = _holdMino;
                 _holdMino = tmpMino;
             }
+            // 次のミノのMinoBehaviorを有効にして開始。
+            _currentMino.GetComponent<MinoBehavior>().enabled = true;
             _currentMino.GetComponent<MinoBehavior>().StartMoveMino();
-            _holdMino.GetComponent<MinoBehavior>().HoldMoveMino();
+            _holdMino.GetComponent<MinoBehavior>().HoldMino();
         }
     }
 }
