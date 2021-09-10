@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UniRx;
+using UniRx.Triggers;
 
 namespace Tetris
 {
@@ -22,11 +24,14 @@ namespace Tetris
         // ミノの生成位置。中心を中央から1マス左の位置になるように生成する。
         private readonly Vector3 kStartingMinoPosition = new Vector3(-0.5f, 8.5f, 0f);
         // ホールドミノの座標。
-        private readonly Vector3 kHoldMinoPosition = new Vector3(-7.5f, -7.0f, 0.0f);
+        private readonly Vector3 kHoldMinoPosition = new Vector3(-7.5f, 7.0f, 0.0f);
         // ネクストミノの座標。この値にOffsetY * 順番を引いた値が最終的な座標になる。
         private readonly Vector3 kNextMinoPosition = new Vector3(7.5f, 7.5f, 0f);
         // ネクストミノのy座標オフセット。
         private const float kNextMinoOffsetY = 1.5f;
+
+        // ミノの回転。ホールドに入れる際に使用
+        private readonly Vector3 kHoldMinoRotation = new Vector3(0.0f, 0.0f, 0.0f);
 
         // ミノのスケール。生成時は全て1、ホールド時は全て0.8、ネクストミノは全て0.5にする。
         private readonly Vector3 kStartingMinoScale = new Vector3(1.0f, 1.0f, 1.0f);
@@ -143,7 +148,7 @@ namespace Tetris
         // 一度ホールドした場合、新しいミノを設置するまではホールド禁止。
         public bool canHoldMino()
         {
-            return _canHold;
+            return _canHold || true;
         }
 
         public void HoldMino()
@@ -151,17 +156,31 @@ namespace Tetris
             _canHold = false;
             // 現在のミノはホールドされるのでMinoBehaviorを停止する。
             _currentMino.GetComponent<MinoBehavior>().enabled = false;
+            // まだホールドしていない場合
             if (_holdMino == null)
             {
                 _holdMino = _currentMino;
+
+                // ホールドの座標・回転・スケールをセット
+                _holdMino.transform.position = kHoldMinoPosition;
+                _holdMino.transform.GetChild(0).transform.rotation = Quaternion.Euler(kHoldMinoRotation);
+                _holdMino.transform.localScale = kHoldMinoScale;
+
+                // 次のミノを取得
                 _currentMino = GetNextMino();
             }
             else
             {
-                GameObject tmpMino = _currentMino;
-                _currentMino = _holdMino;
-                _holdMino = tmpMino;
+                GameObject tmpMino = _holdMino;
+                _holdMino = _currentMino;
+
+                // ホールドの座標・回転・スケールをセット
+                _holdMino.transform.position = kHoldMinoPosition;
+                _holdMino.transform.GetChild(0).transform.rotation = Quaternion.Euler(kHoldMinoRotation);
+                _holdMino.transform.localScale = kHoldMinoScale;
+                _currentMino = tmpMino;
             }
+            Debug.Log("hold : " + _holdMino + " current : " + _currentMino);
             // 次のミノのMinoBehaviorを有効にして開始。
             _currentMino.GetComponent<MinoBehavior>().enabled = true;
             _currentMino.GetComponent<MinoBehavior>().StartMoveMino();

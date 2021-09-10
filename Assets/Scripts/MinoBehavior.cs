@@ -9,6 +9,7 @@ namespace Tetris
 {
     public class MinoBehavior : MonoBehaviour
     {
+        // ミノマネージャーオブジェクト
         private GameObject _minoManager;
 
         // 子オブジェクトの参照用メンバ変数
@@ -27,10 +28,13 @@ namespace Tetris
             get { return _minoType; }
         }
         // 現在のレベル。落下速度に影響する。
-        private int _levels;
+        private int _levels = 1;
 
         // ホールド状態かどうか
-        private bool _isHold;
+        private bool _isHold = false;
+
+        // 設置済みかどうか
+        private bool _isStable = false;
 
         // このミノの一番左の座標
         private float _currentLeftPosition;
@@ -43,7 +47,10 @@ namespace Tetris
         // 右端の座標
         private const float kMaxPositionX = 4.5f;
 
-        private void Awake() {
+        private const float _maxFlameRate = 60.0f;
+
+        private void Awake()
+        {
             // メンバ変数の初期化
             _rotationPivot = this.transform.GetChild(0).gameObject;
             _componentBlock[0] = _rotationPivot.transform.GetChild(0).gameObject;
@@ -81,7 +88,7 @@ namespace Tetris
 
             // Qキーor。左回転
             this.UpdateAsObservable()
-                .Where(_ => (Input.GetKeyDown(KeyCode.R)))
+                .Where(_ => (Input.GetKeyDown(KeyCode.Q)))
                 .BatchFrame(0, FrameCountType.FixedUpdate)
                 .Subscribe(_ => RotateLeft());
 
@@ -91,7 +98,7 @@ namespace Tetris
                 .BatchFrame(0, FrameCountType.FixedUpdate)
                 .Subscribe(_ => RotateRight());
 
-            // キーor。ホールド
+            // LControlキーor。ホールド
             this.UpdateAsObservable()
                 .Where(_ => (Input.GetKeyDown(KeyCode.LeftControl)))
                 .BatchFrame(0, FrameCountType.FixedUpdate)
@@ -111,25 +118,37 @@ namespace Tetris
             _currentLeftPosition = minLeft;
             _currentRightPosition = maxRight;
         }
+
+        // 現在のレベルを基に落下速度用の値に変換
+        // 具体的には_levels^(3/2)の値を返し、その値をもとに落下速度を算出する
+        private float FixedLevel()
+        {
+            return _levels * Mathf.Sqrt(_levels);
+        }
+
         public void StartMoveMino()
         {
             SetLeftRightPosition();
             // this._levels = .GetComponent<>().GetCurrentLevels();
-            // levelsに合わせて落下時間を設定。
-            float repeatRate = _levels;
-            //InvokeRepeating("", 0f, repeatRate);
+            // levelsに合わせて落下時間を設定。最高速度は1fに1マス落下
+            float repeatRate = _maxFlameRate / FixedLevel();
+            repeatRate = Mathf.Max(repeatRate, 1.0f);
+            Invoke("MoveDownInvoke", repeatRate / _maxFlameRate);
         }
 
         public void HoldMino()
         {
-            if(!_minoManager.GetComponent<MinoController>().canHoldMino()) return;
+            if (!_minoManager.GetComponent<MinoController>().canHoldMino()) return;
             _isHold = true;
+            _minoManager.GetComponent<MinoController>().HoldMino();
         }
 
         private void MoveLeft()
         {
+            // 移動ができるのはホールド状態でなく設置状態でもない時
+            if (_isHold || _isStable) return;
             // 既に左端の場合は移動できない
-            if(_currentLeftPosition <= kMinPositionX) return;
+            if (_currentLeftPosition <= kMinPositionX) return;
             Vector3 newMinoPosition = this.gameObject.transform.position;
             newMinoPosition.x -= 1;
             this.gameObject.transform.position = newMinoPosition;
@@ -138,8 +157,10 @@ namespace Tetris
 
         private void MoveRight()
         {
+            // 移動ができるのはホールド状態でなく設置状態でもない時
+            if (_isHold || _isStable) return;
             // 既に右端の場合は移動できない
-            if(_currentRightPosition >= kMaxPositionX) return;
+            if (_currentRightPosition >= kMaxPositionX) return;
             Vector3 newMinoPosition = this.gameObject.transform.position;
             newMinoPosition.x += 1;
             this.gameObject.transform.position = newMinoPosition;
@@ -148,7 +169,35 @@ namespace Tetris
 
         private void MoveDown()
         {
+            // 自動落下を一時停止
+            CancelInvoke("MoveDownInvoke");
+            // 移動ができるのはホールド状態でなく設置状態でもない時
+            if (_isHold || _isStable) return;
+            // 下端に到達した
 
+            // ミノを1マス落とす
+            Vector3 newMinoPosition = this.gameObject.transform.position;
+            newMinoPosition.y -= 1;
+            // 自動落下を再開
+            this.gameObject.transform.position = newMinoPosition;
+            float repeatRate = _maxFlameRate / FixedLevel();
+            repeatRate = Mathf.Max(repeatRate, 1.0f);
+            Invoke("MoveDownInvoke", repeatRate / _maxFlameRate);
+        }
+
+        // 時間経過でミノを落下させる
+        private void MoveDownInvoke()
+        {
+            // 下端に到達した
+
+            // ミノを1マス落とす
+            Vector3 newMinoPosition = this.gameObject.transform.position;
+            newMinoPosition.y -= 1;
+            // 自動落下させる
+            this.gameObject.transform.position = newMinoPosition;
+            float repeatRate = _maxFlameRate / FixedLevel();
+            repeatRate = Mathf.Max(repeatRate, 1.0f);
+            Invoke("MoveDownInvoke", repeatRate / _maxFlameRate);
         }
 
         private void MoveHardDrop()
@@ -158,15 +207,37 @@ namespace Tetris
 
         private void RotateLeft()
         {
-
+            // 回転ができるのはホールド状態でなく設置状態でもない時
+            if (_isHold || _isStable) return;
+            // 回転中心オブジェクトをもとにz軸に90°回転
+            _rotationPivot.transform.Rotate(transform.forward, 90);
+            SetLeftRightPosition();
+            // もし回転で左右の壁を越えてしまった場合は回転をキャンセル
+            if (_currentLeftPosition < kMinPositionX || _currentRightPosition > kMaxPositionX)
+            {
+                _rotationPivot.transform.Rotate(transform.forward, -90);
+                SetLeftRightPosition();
+            }
         }
 
+        // z軸に-90°
         private void RotateRight()
         {
-
+            // 回転ができるのはホールド状態でなく設置状態でもない時
+            if (_isHold || _isStable) return;
+            // 回転中心オブジェクトをもとにz軸に-90°回転
+            _rotationPivot.transform.Rotate(transform.forward, -90);
+            SetLeftRightPosition();
+            // もし回転で左右の壁を越えてしまった場合は回転をキャンセル
+            if (_currentLeftPosition < kMinPositionX || _currentRightPosition > kMaxPositionX)
+            {
+                _rotationPivot.transform.Rotate(transform.forward, 90);
+                SetLeftRightPosition();
+            }
         }
 
-        public void SetMinoManager(GameObject minoManager){
+        public void SetMinoManager(GameObject minoManager)
+        {
             this._minoManager = minoManager;
         }
     }
