@@ -930,13 +930,14 @@ GameObject:
   - component: {fileID: 333474537}
   - component: {fileID: 333474536}
   - component: {fileID: 333474535}
+  - component: {fileID: 333474538}
   m_Layer: 0
   m_Name: UIManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &333474535
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -949,6 +950,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b9061cc7ec308e448b89da1bbeac70ad, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _timeText: {fileID: 1981091633}
+  _levelText: {fileID: 143323937}
+  _linesText: {fileID: 630836335}
 --- !u!114 &333474536
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -961,6 +965,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1418004d87f08344c86b0469525f4a6f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _scoreText: {fileID: 1664985630}
+  _hiScoreText: {fileID: 232542693}
 --- !u!4 &333474537
 Transform:
   m_ObjectHideFlags: 0
@@ -975,6 +981,21 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 5
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &333474538
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 333474534}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2fc02ded93e35a248bd60b6782557bab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _lenText: {fileID: 659376286}
+  _tetrisAndSpinText: {fileID: 1070606071}
+  _backToBackText: {fileID: 1331555641}
 --- !u!1 &344351516
 GameObject:
   m_ObjectHideFlags: 0
