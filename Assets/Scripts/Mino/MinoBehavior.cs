@@ -142,6 +142,7 @@ namespace Tetris
             {
                 if (!_minoManager.GetComponent<MinoController>().canHoldMino()) return;
                 _isHold = true;
+                CancelInvoke("MoveDownInvoke");
                 _minoManager.GetComponent<MinoController>().HoldMino();
             }
 
