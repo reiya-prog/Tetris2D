@@ -8,7 +8,7 @@ namespace Tetris
 {
     namespace UI
     {
-        public class TechnicalDrawer
+        public class TechnicalDrawer : MonoBehaviour
         {
             // 編集するTextMeshProオブジェクト
             // LENを表示するテキスト
