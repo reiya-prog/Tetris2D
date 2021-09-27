@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEngine;
 using UniRx;
 using UniRx.Triggers;
+using Tetris.Mino;
 
 namespace Tetris
 {
@@ -22,111 +23,64 @@ namespace Tetris
 
         public class MinoController : MonoBehaviour
         {
+            // ミノの配置状況を保存する配列
+            // [縦][横]でアクセスする
+            // 壁を初期値で設定する
+            // 壁はこの形→|    |
+            // 　　　　　　|    |
+            // 　　　　　　|____|
+            private bool[,] _minoPlacementArray = new bool[22, 12];
+            // 左下を(1,1)としたときの設置可能な位置のxとyの最大値
+            private int kMaxX = 10;
+            private int kMaxY = 21;
+            // このスクリプトがアタッチされているゲームオブジェクト。MinoGeneraterもアタッチされている。
+            private GameObject _minoManagerObject;
+            // ScoreManagerオブジェクト
+            [SerializeField]
+            private GameObject ScoreManagerObject;
+
             // ミノの座標周りの定数
-            // ミノの生成位置。中心を中央から1マス左の位置になるように生成する。
-            private readonly Vector3 kStartingMinoPosition = new Vector3(-0.5f, 8.5f, 0f);
             // ホールドミノの座標。
             private readonly Vector3 kHoldMinoPosition = new Vector3(-7.5f, 7.0f, 0.0f);
-            // ネクストミノの座標。この値にOffsetY * 順番を引いた値が最終的な座標になる。
-            private readonly Vector3 kNextMinoPosition = new Vector3(7.5f, 7.5f, 0f);
-            // ネクストミノのy座標オフセット。
-            private const float kNextMinoOffsetY = 1.5f;
-
             // ミノの回転。ホールドに入れる際に使用
             private readonly Vector3 kHoldMinoRotation = new Vector3(0.0f, 0.0f, 0.0f);
-
-            // ミノのスケール。生成時は全て1、ホールド時は全て0.8、ネクストミノは全て0.5にする。
-            private readonly Vector3 kStartingMinoScale = new Vector3(1.0f, 1.0f, 1.0f);
+            // ホールド状態のミノのスケール。全て0.8。
             private readonly Vector3 kHoldMinoScale = new Vector3(0.8f, 0.8f, 0.8f);
-            private readonly Vector3 kNextMinoScale = new Vector3(0.5f, 0.5f, 0.5f);
 
             // ミノオブジェクト周りの変数
-            // ネクストミノの個数
-            private const int kMaxNextMinoSize = 6;
             // 現在フォーカスされているミノ
-            private GameObject _currentMino;
+            private GameObject _currentMinoObject;
             // ホールドされているミノ。最初にホールドされるまではnullオブジェクト。
-            private GameObject _holdMino = null;
-            // ネクストミノオブジェクトを保持するキュー。常に6種類のミノを保持する。
-            private Queue<GameObject> _nextMinos;
-            // ネクストミノタイプを保持するキュー。ネクストミノは7種類のミノをランダムに並べたセットを繰り返す。
-            private Queue<Tetromino> _nextMinosType;
-            // テトリミノの種類一覧
-            private Tetromino[] _tetrominos = new Tetromino[] { Tetromino.IMino, Tetromino.JMino, Tetromino.LMino, Tetromino.OMino, Tetromino.SMino, Tetromino.TMino, Tetromino.ZMino };
-            // Resourcesフォルダにあるミノプレハブを所持するための配列
-            private GameObject[] _minoObjects;
+            private GameObject _holdMinoObject = null;
 
             // ホールドをしていいかどうか
             private bool _canHold = true;
 
             private void Awake()
             {
-                _nextMinos = new Queue<GameObject>();
-                _nextMinosType = new Queue<Tetromino>();
+                // 壁の設定
+                int leftX = 0;
+                int rightX = _minoPlacementArray.GetLength(1) - 1;
+                for(int xi=0;xi<_minoPlacementArray.GetLength(1);++xi){
+                    _minoPlacementArray[0, xi] = true;
+                }
+                for(int yi=1;yi<_minoPlacementArray.GetLength(0);++yi){
+                    _minoPlacementArray[yi, leftX] = true;
+                    _minoPlacementArray[yi, rightX] = true;
+                }
+
+                // MinoManagerオブジェクトの取得
+                _minoManagerObject = this.gameObject;
+                this.enabled = false;
             }
 
             private void Start()
             {
-                _minoObjects = Resources.LoadAll<GameObject>("Tetromino");
-
-                SetNextMinosType();
-                for (int i = 0; i < kMaxNextMinoSize; ++i)
-                {
-                    GenerateNextMino();
-                }
-
                 // テトリミノを取得してゲーム開始
-                _currentMino = GetNextMino();
-                _currentMino.GetComponent<MinoBehavior>().enabled = true;
-                _currentMino.GetComponent<MinoBehavior>().SetMinoManager(this.gameObject);
-                _currentMino.GetComponent<MinoBehavior>().StartMoveMino();
-            }
-
-            // 7種類のミノをシャッフルしてネクストミノの順番として保存。
-            private void SetNextMinosType()
-            {
-                Tetromino[] shuffledTetrominos = _tetrominos.OrderBy(i => System.Guid.NewGuid()).ToArray();
-                foreach (Tetromino item in shuffledTetrominos)
-                {
-                    _nextMinosType.Enqueue(item);
-                }
-            }
-
-            // _nextMinosTypeをもとにネクストミノオブジェクトを生成。
-            private void GenerateNextMino()
-            {
-                Tetromino nextMinoType = _nextMinosType.Dequeue();
-                GameObject generatedMino = Instantiate(_minoObjects[(int)nextMinoType]);
-                _nextMinos.Enqueue(generatedMino);
-                SetNextMinosPosition();
-            }
-
-            // ネクストミノの座標を調整
-            private void SetNextMinosPosition()
-            {
-                foreach (var (item, index) in _nextMinos.Select((item, index) => (item, index)))
-                {
-                    item.transform.position = kNextMinoPosition - new Vector3(0f, kNextMinoOffsetY * index, 0f);
-                    item.transform.localScale = kNextMinoScale;
-                }
-            }
-
-            // ネクストミノの先頭を取得し、次の操作ミノにする。
-            private GameObject GetNextMino()
-            {
-                // ネクストミノが6つ(次に呼び出すミノ+ネクストミノに残る5つ)まで減っていた場合は後ろに7つ追加する
-                if (_nextMinosType.Count <= kMaxNextMinoSize)
-                {
-                    SetNextMinosType();
-                }
-                // ネクストミノの先頭を取得し、末尾に一つ追加する。
-                GameObject nextMino = _nextMinos.Dequeue();
-                GenerateNextMino();
-
-                // 取得したミノを操作ミノの位置にセット
-                nextMino.transform.position = kStartingMinoPosition;
-                nextMino.transform.localScale = kStartingMinoScale;
-                return nextMino;
+                _currentMinoObject = _minoManagerObject.GetComponent<MinoGenerater>().GetNextMino();
+                _currentMinoObject.GetComponent<MinoBehavior>().enabled = true;
+                _currentMinoObject.GetComponent<MinoBehavior>().SetMinoManager(this.gameObject);
+                _currentMinoObject.GetComponent<MinoBehavior>().StartMoveMino();
             }
 
             // 現在のミノが下まで到着した際に呼ばれる。
@@ -134,59 +88,107 @@ namespace Tetris
             public void StartNextMino()
             {
                 // 到着したミノのMinoBehaviorを停止する。
-                _currentMino.GetComponent<MinoBehavior>().enabled = false;
+                _currentMinoObject.GetComponent<MinoBehavior>().enabled = false;
 
                 // ホールドが可能になる
                 _canHold = true;
 
                 // テトリミノを取得して続ける。
-                _currentMino = GetNextMino();
-                _currentMino.GetComponent<MinoBehavior>().enabled = true;
-                _currentMino.GetComponent<MinoBehavior>().SetMinoManager(this.gameObject);
-                _currentMino.GetComponent<MinoBehavior>().StartMoveMino();
+                _currentMinoObject = _minoManagerObject.GetComponent<MinoGenerater>().GetNextMino();
+                _currentMinoObject.GetComponent<MinoBehavior>().enabled = true;
+                _currentMinoObject.GetComponent<MinoBehavior>().SetMinoManager(this.gameObject);
+                _currentMinoObject.GetComponent<MinoBehavior>().StartMoveMino();
             }
 
             // ホールドが可能かどうか
             // 一度ホールドした場合、新しいミノを設置するまではホールド禁止。
             public bool canHoldMino()
             {
-                return _canHold || true;
+                return _canHold;
             }
 
             public void HoldMino()
             {
                 _canHold = false;
                 // 現在のミノはホールドされるのでMinoBehaviorを停止する。
-                _currentMino.GetComponent<MinoBehavior>().enabled = false;
+                _currentMinoObject.GetComponent<MinoBehavior>().enabled = false;
                 // まだホールドしていない場合
-                if (_holdMino == null)
+                if (_holdMinoObject == null)
                 {
-                    _holdMino = _currentMino;
-
-                    // ホールドの座標・回転・スケールをセット
-                    _holdMino.transform.position = kHoldMinoPosition;
-                    _holdMino.transform.GetChild(0).transform.rotation = Quaternion.Euler(kHoldMinoRotation);
-                    _holdMino.transform.localScale = kHoldMinoScale;
+                    _holdMinoObject = _currentMinoObject;
 
                     // 次のミノを取得
-                    _currentMino = GetNextMino();
+                    _currentMinoObject = _minoManagerObject.GetComponent<MinoGenerater>().GetNextMino();
+                    _currentMinoObject.GetComponent<MinoBehavior>().SetMinoManager(this.gameObject);
                 }
                 else
                 {
-                    GameObject tmpMino = _holdMino;
-                    _holdMino = _currentMino;
-
-                    // ホールドの座標・回転・スケールをセット
-                    _holdMino.transform.position = kHoldMinoPosition;
-                    _holdMino.transform.GetChild(0).transform.rotation = Quaternion.Euler(kHoldMinoRotation);
-                    _holdMino.transform.localScale = kHoldMinoScale;
-                    _currentMino = tmpMino;
+                    // 現在のミノをホールドミノと交換する
+                    GameObject tmpMino = _holdMinoObject;
+                    _holdMinoObject = _currentMinoObject;
+                    _currentMinoObject = tmpMino;
                 }
-                Debug.Log("hold : " + _holdMino + " current : " + _currentMino);
+                // ホールドの座標・回転・スケールをセット
+                _holdMinoObject.transform.position = kHoldMinoPosition;
+                _holdMinoObject.transform.GetChild(0).transform.rotation = Quaternion.Euler(kHoldMinoRotation);
+                _holdMinoObject.transform.localScale = kHoldMinoScale;
+
                 // 次のミノのMinoBehaviorを有効にして開始。
-                _currentMino.GetComponent<MinoBehavior>().enabled = true;
-                _currentMino.GetComponent<MinoBehavior>().StartMoveMino();
-                _holdMino.GetComponent<MinoBehavior>().HoldMino();
+                _currentMinoObject.GetComponent<MinoBehavior>().enabled = true;
+                _currentMinoObject.GetComponent<MinoBehavior>().StartMoveMino();
+                _holdMinoObject.GetComponent<MinoBehavior>().HoldMino();
+            }
+
+            // 設置したミノのフラグを建てる
+            public void SetMinoPlacement(Vector3 setPosition)
+            {
+                // 座標をインデクスに変換する。x座標y座標の順で返ってくる
+                System.Tuple<int, int> index = ConvertPosition2Index(setPosition.x, setPosition.y);
+                _minoPlacementArray[index.Item2, index.Item1] = true;
+            }
+
+            // ミノのフラグが建っているかのチェック
+            public bool CheckMinoPlacement(Vector3 checkPosition){
+                // 座標をインデクスに変換する。x座標y座標の順で返ってくる
+                System.Tuple<int, int> index = ConvertPosition2Index(checkPosition.x, checkPosition.y);
+                return _minoPlacementArray[index.Item2, index.Item1];
+            }
+
+            // 設置したミノの列が消せるかどうかのチェック
+            // 引数は設置したミノの下端と上端(その範囲のみチェックすれば十分)
+            public void CheckLine(int lowerY, int upperY)
+            {
+                for (int yi = lowerY; yi <= upperY; ++yi)
+                {
+                    bool isDelete = true;
+                    for (int xi = 0; xi <= kMaxX; ++xi)
+                    {
+                        // もし設置フラグがfalseの場合isDeleteがfalseになる
+                        isDelete &= _minoPlacementArray[yi, xi];
+                    }
+                    // 消すことができる
+                    if (isDelete)
+                    {
+                        DeleteLine(yi);
+                    }
+                }
+            }
+
+            // 引数の列のミノを削除する
+            private void DeleteLine(int y)
+            {
+
+
+                ScoreManagerObject.GetComponent<ScoreManager>().AddLineDeleteScore();
+            }
+
+            // 座標から配列のindexに変換するための値
+            // 左下の座標(-1.0f, -9.5f)をindex(1, 1)にする
+            private const float kConvertOffsetX = 5.5f;
+            private const float kConvertOffsetY = 10.5f;
+            private System.Tuple<int, int> ConvertPosition2Index(float posX, float posY){
+                System.Tuple<int, int> convertedIndex = new System.Tuple<int, int>((int)(posX + kConvertOffsetX), (int)(posY + kConvertOffsetY));
+                return convertedIndex;
             }
         }
     }

@@ -48,6 +48,12 @@ namespace Tetris
             private const float kMinPositionX = -4.5f;
             // 右端の座標
             private const float kMaxPositionX = 4.5f;
+            // 左方向の移動
+            private readonly Vector3 kMoveLeftDirection = new Vector3(-1.0f, 0.0f, 0.0f);
+            // 右方向の移動
+            private readonly Vector3 kMoveRightDirection = new Vector3(1.0f, 0.0f, 0.0f);
+            // 下方向の移動
+            private readonly Vector3 kMoveDownDirection = new Vector3(0.0f, -1.0f, 0.0f);
 
             private const float _maxFlameRate = 60.0f;
 
@@ -142,17 +148,34 @@ namespace Tetris
             {
                 if (!_minoManager.GetComponent<MinoController>().canHoldMino()) return;
                 _isHold = true;
+                CancelInvoke("MoveDownInvoke");
                 _minoManager.GetComponent<MinoController>().HoldMino();
+            }
+
+            // 移動先にミノがあるかチェックする。ある場合:true,移動できない。ない場合:false,移動できる。
+            // 引数は移動方向(x==1:右方向, x==-1:右方向, y==-1:下方向, y=1 or z!=0:無効な移動)
+            private bool CheckMovable(Vector3 direction)
+            {
+                // 無効な移動
+                if (direction.y == 1.0f || direction.z != 0.0f) return true;
+                bool retFlag = false;
+                // どこか一か所でもミノが存在(CheckMinoPlacementがtrue)の場合は移動できない
+                for (int i = 0; i < _componentBlock.Length; ++i)
+                {
+                    Vector3 checkPosition = _componentBlock[i].transform.position;
+                    checkPosition += direction;
+                    retFlag |= _minoManager.GetComponent<MinoController>().CheckMinoPlacement(checkPosition);
+                }
+                return retFlag;
             }
 
             private void MoveLeft()
             {
                 // 移動ができるのはホールド状態でなく設置状態でもない時
                 if (_isHold || _isStable) return;
-                // 既に左端の場合は移動できない
-                if (_currentLeftPosition <= kMinPositionX) return;
-                Vector3 newMinoPosition = this.gameObject.transform.position;
-                newMinoPosition.x -= 1;
+                // 左に壁かミノがある場合移動できない
+                if (CheckMovable(kMoveLeftDirection)) return;
+                Vector3 newMinoPosition = this.gameObject.transform.position + kMoveLeftDirection;
                 this.gameObject.transform.position = newMinoPosition;
                 SetLeftRightPosition();
             }
@@ -161,10 +184,9 @@ namespace Tetris
             {
                 // 移動ができるのはホールド状態でなく設置状態でもない時
                 if (_isHold || _isStable) return;
-                // 既に右端の場合は移動できない
-                if (_currentRightPosition >= kMaxPositionX) return;
-                Vector3 newMinoPosition = this.gameObject.transform.position;
-                newMinoPosition.x += 1;
+                // 右に壁かミノがある場合移動できない
+                if (CheckMovable(kMoveRightDirection)) return;
+                Vector3 newMinoPosition = this.gameObject.transform.position + kMoveRightDirection;
                 this.gameObject.transform.position = newMinoPosition;
                 SetLeftRightPosition();
             }
@@ -175,11 +197,12 @@ namespace Tetris
                 CancelInvoke("MoveDownInvoke");
                 // 移動ができるのはホールド状態でなく設置状態でもない時
                 if (_isHold || _isStable) return;
-                // 下端に到達した
-
+                // これ以上下に移動できない場合、その位置にミノを固定する
+                if(CheckMovable(kMoveDownDirection)){
+                    return;
+                }
                 // ミノを1マス落とす
-                Vector3 newMinoPosition = this.gameObject.transform.position;
-                newMinoPosition.y -= 1;
+                Vector3 newMinoPosition = this.gameObject.transform.position + kMoveDownDirection;
                 // 自動落下を再開
                 this.gameObject.transform.position = newMinoPosition;
                 float repeatRate = _maxFlameRate / FixedLevel();
@@ -190,11 +213,12 @@ namespace Tetris
             // 時間経過でミノを落下させる
             private void MoveDownInvoke()
             {
-                // 下端に到達した
-
+                // これ以上下に移動できない場合、その位置にミノを固定する
+                if(CheckMovable(kMoveDownDirection)){
+                    return;
+                }
                 // ミノを1マス落とす
-                Vector3 newMinoPosition = this.gameObject.transform.position;
-                newMinoPosition.y -= 1;
+                Vector3 newMinoPosition = this.gameObject.transform.position + kMoveDownDirection;
                 // 自動落下させる
                 this.gameObject.transform.position = newMinoPosition;
                 float repeatRate = _maxFlameRate / FixedLevel();
@@ -214,12 +238,8 @@ namespace Tetris
                 // 回転中心オブジェクトをもとにz軸に90°回転
                 _rotationPivot.transform.Rotate(transform.forward, 90);
                 SetLeftRightPosition();
-                // もし回転で左右の壁を越えてしまった場合は回転をキャンセル
-                if (_currentLeftPosition < kMinPositionX || _currentRightPosition > kMaxPositionX)
-                {
-                    _rotationPivot.transform.Rotate(transform.forward, -90);
-                    SetLeftRightPosition();
-                }
+                // もし回転で左右の壁を越えてしまった場合はぶつからない位置まで横移動
+
             }
 
             // z軸に-90°
@@ -230,12 +250,8 @@ namespace Tetris
                 // 回転中心オブジェクトをもとにz軸に-90°回転
                 _rotationPivot.transform.Rotate(transform.forward, -90);
                 SetLeftRightPosition();
-                // もし回転で左右の壁を越えてしまった場合は回転をキャンセル
-                if (_currentLeftPosition < kMinPositionX || _currentRightPosition > kMaxPositionX)
-                {
-                    _rotationPivot.transform.Rotate(transform.forward, 90);
-                    SetLeftRightPosition();
-                }
+                // もし回転で左右の壁を越えてしまった場合はぶつからない位置まで横移動
+
             }
 
             public void SetMinoManager(GameObject minoManager)
