@@ -42,6 +42,7 @@ namespace Tetris
             // ミノの座標周りの定数
             // ホールドミノの座標。
             private readonly Vector3 kHoldMinoPosition = new Vector3(-7.5f, 7.0f, 0.0f);
+            private readonly Vector3 kHoldIOMinoPosition = new Vector3(-8.0f, 7.0f, 0.0f);
             // ミノの回転。ホールドに入れる際に使用
             private readonly Vector3 kHoldMinoRotation = new Vector3(0.0f, 0.0f, 0.0f);
             // ホールド状態のミノのスケール。全て0.8。
@@ -61,10 +62,12 @@ namespace Tetris
                 // 壁の設定
                 int leftX = 0;
                 int rightX = _minoPlacementArray.GetLength(1) - 1;
-                for(int xi=0;xi<_minoPlacementArray.GetLength(1);++xi){
+                for (int xi = 0; xi < _minoPlacementArray.GetLength(1); ++xi)
+                {
                     _minoPlacementArray[0, xi] = true;
                 }
-                for(int yi=1;yi<_minoPlacementArray.GetLength(0);++yi){
+                for (int yi = 1; yi < _minoPlacementArray.GetLength(0); ++yi)
+                {
                     _minoPlacementArray[yi, leftX] = true;
                     _minoPlacementArray[yi, rightX] = true;
                 }
@@ -128,8 +131,16 @@ namespace Tetris
                     _holdMinoObject = _currentMinoObject;
                     _currentMinoObject = tmpMino;
                 }
-                // ホールドの座標・回転・スケールをセット
-                _holdMinoObject.transform.position = kHoldMinoPosition;
+                // IミノもしくはOミノの場合ホールドする座標が違う
+                if (_holdMinoObject.GetComponent<MinoBehavior>().minoType == Tetromino.IMino ||
+                   _holdMinoObject.GetComponent<MinoBehavior>().minoType == Tetromino.OMino)
+                {
+                    _holdMinoObject.transform.position = kHoldIOMinoPosition;
+                }
+                else
+                {
+                    _holdMinoObject.transform.position = kHoldMinoPosition;
+                }
                 _holdMinoObject.transform.GetChild(0).transform.rotation = Quaternion.Euler(kHoldMinoRotation);
                 _holdMinoObject.transform.localScale = kHoldMinoScale;
 
@@ -148,7 +159,8 @@ namespace Tetris
             }
 
             // ミノのフラグが建っているかのチェック
-            public bool CheckMinoPlacement(Vector3 checkPosition){
+            public bool CheckMinoPlacement(Vector3 checkPosition)
+            {
                 // 座標をインデクスに変換する。x座標y座標の順で返ってくる
                 System.Tuple<int, int> index = ConvertPosition2Index(checkPosition.x, checkPosition.y);
                 return _minoPlacementArray[index.Item2, index.Item1];
@@ -186,7 +198,8 @@ namespace Tetris
             // 左下の座標(-1.0f, -9.5f)をindex(1, 1)にする
             private const float kConvertOffsetX = 5.5f;
             private const float kConvertOffsetY = 10.5f;
-            private System.Tuple<int, int> ConvertPosition2Index(float posX, float posY){
+            private System.Tuple<int, int> ConvertPosition2Index(float posX, float posY)
+            {
                 System.Tuple<int, int> convertedIndex = new System.Tuple<int, int>((int)(posX + kConvertOffsetX), (int)(posY + kConvertOffsetY));
                 return convertedIndex;
             }
