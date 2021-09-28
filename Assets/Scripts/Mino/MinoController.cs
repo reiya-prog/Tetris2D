@@ -53,12 +53,17 @@ namespace Tetris
             private GameObject _currentMinoObject;
             // ホールドされているミノ。最初にホールドされるまではnullオブジェクト。
             private GameObject _holdMinoObject = null;
+            // 設置したミノの一覧
+            private List<GameObject> _fixedMinoObjects;
 
             // ホールドをしていいかどうか
             private bool _canHold = true;
 
             private void Awake()
             {
+                // 変数の初期化
+                _fixedMinoObjects = new List<GameObject>();
+
                 // 壁の設定
                 int leftX = 0;
                 int rightX = _minoPlacementArray.GetLength(1) - 1;
@@ -133,7 +138,7 @@ namespace Tetris
                 }
                 // IミノもしくはOミノの場合ホールドする座標が違う
                 if (_holdMinoObject.GetComponent<MinoBehavior>().minoType == Tetromino.IMino ||
-                   _holdMinoObject.GetComponent<MinoBehavior>().minoType == Tetromino.OMino)
+                    _holdMinoObject.GetComponent<MinoBehavior>().minoType == Tetromino.OMino)
                 {
                     _holdMinoObject.transform.position = kHoldIOMinoPosition;
                 }
@@ -150,11 +155,20 @@ namespace Tetris
                 _holdMinoObject.GetComponent<MinoBehavior>().HoldMino();
             }
 
+            // ミノが設置したときに呼ばれる関数
+            // ラインの判定などを行った後新しいミノを呼び出す
+            public void FixMino(float lowerYPosition, float upperYPosition)
+            {
+                _fixedMinoObjects.Add(_currentMinoObject);
+                CheckLine(lowerYPosition, upperYPosition);
+                StartNextMino();
+            }
+
             // 設置したミノのフラグを建てる
-            public void SetMinoPlacement(Vector3 setPosition)
+            public void SetMinoPlacement(Vector3 fixedPosition)
             {
                 // 座標をインデクスに変換する。x座標y座標の順で返ってくる
-                System.Tuple<int, int> index = ConvertPosition2Index(setPosition.x, setPosition.y);
+                System.Tuple<int, int> index = ConvertPosition2Index(fixedPosition.x, fixedPosition.y);
                 _minoPlacementArray[index.Item2, index.Item1] = true;
             }
 
@@ -163,19 +177,22 @@ namespace Tetris
             {
                 // 座標をインデクスに変換する。x座標y座標の順で返ってくる
                 System.Tuple<int, int> index = ConvertPosition2Index(checkPosition.x, checkPosition.y);
+                Debug.Log(index.Item1 + " " + index.Item2);
                 return _minoPlacementArray[index.Item2, index.Item1];
             }
 
             // 設置したミノの列が消せるかどうかのチェック
             // 引数は設置したミノの下端と上端(その範囲のみチェックすれば十分)
-            public void CheckLine(int lowerY, int upperY)
+            public void CheckLine(float lowerYPosition, float upperYPosition)
             {
-                for (int yi = lowerY; yi <= upperY; ++yi)
+                System.Tuple<int, int> index = ConvertY2Index(lowerYPosition, upperYPosition);
+                for (int yi = index.Item1; yi <= index.Item2; ++yi)
                 {
+                    Debug.Log(yi);
                     bool isDelete = true;
-                    for (int xi = 0; xi <= kMaxX; ++xi)
+                    for (int xi = 1; xi <= kMaxX; ++xi)
                     {
-                        // もし設置フラグがfalseの場合isDeleteがfalseになる
+                        // もし設置フラグが一つでもfalseの場合isDeleteがfalseになる
                         isDelete &= _minoPlacementArray[yi, xi];
                     }
                     // 消すことができる
@@ -189,9 +206,34 @@ namespace Tetris
             // 引数の列のミノを削除する
             private void DeleteLine(int y)
             {
-
-
+                for (int i = 0; i < _fixedMinoObjects.Count; ++i)
+                {
+                    GameObject gameObject = _fixedMinoObjects[i];
+                    // 該当の列にオブジェクトがあった場合Destroyする
+                    // 引数は列番号を座標に変換して渡す
+                    // 戻り値はそのミノ全てをDestroyするかどうか
+                    bool isEmpty = gameObject.GetComponent<MinoBehavior>().DestroyMino((float)y - kConvertOffsetY);
+                    if (isEmpty)
+                    {
+                        Destroy(gameObject);
+                        _fixedMinoObjects.RemoveAt(i);
+                    }
+                }
+                ResetMinoPlacement(y);
                 ScoreManagerObject.GetComponent<ScoreManager>().AddLineDeleteScore();
+            }
+
+            // 消したラインより上のミノが下に落ちるのでminoPlacementをずらす
+            private void ResetMinoPlacement(int y)
+            {
+                for (int yi = y; yi < kMaxY; ++yi)
+                {
+                    for (int xi = 1; xi <= kMaxX; ++xi)
+                    {
+                        _minoPlacementArray[yi, xi] = _minoPlacementArray[yi + 1, xi];
+                    }
+                }
+                for (int xi = 1; xi <= kMaxX; ++xi) _minoPlacementArray[kMaxY, xi] = false;
             }
 
             // 座標から配列のindexに変換するための値
@@ -201,6 +243,12 @@ namespace Tetris
             private System.Tuple<int, int> ConvertPosition2Index(float posX, float posY)
             {
                 System.Tuple<int, int> convertedIndex = new System.Tuple<int, int>((int)(posX + kConvertOffsetX), (int)(posY + kConvertOffsetY));
+                return convertedIndex;
+            }
+
+            private System.Tuple<int, int> ConvertY2Index(float lowerY, float upperY)
+            {
+                System.Tuple<int, int> convertedIndex = new System.Tuple<int, int>((int)(lowerY + kConvertOffsetY), (int)(upperY + kConvertOffsetY));
                 return convertedIndex;
             }
         }
