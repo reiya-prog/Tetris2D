@@ -91,10 +91,22 @@ namespace Tetris
                 _currentMinoObject.GetComponent<MinoBehavior>().StartMoveMino();
             }
 
+            private void PlaceLog(){
+                string log = "";
+                for(int i=kMaxY;i>=1;--i){
+                    for(int j=1;j<=kMaxX;++j){
+                        log += _minoPlacementArray[i, j] ? "1":"0";
+                    }
+                    log += "\n";
+                }
+                Debug.Log(log);
+            }
+
             // 現在のミノが下まで到着した際に呼ばれる。
             // 次のミノを取得してゲームを続ける。
             public void StartNextMino()
             {
+                PlaceLog();
                 // 到着したミノのMinoBehaviorを停止する。
                 _currentMinoObject.GetComponent<MinoBehavior>().enabled = false;
 
@@ -177,7 +189,6 @@ namespace Tetris
             {
                 // 座標をインデクスに変換する。x座標y座標の順で返ってくる
                 System.Tuple<int, int> index = ConvertPosition2Index(checkPosition.x, checkPosition.y);
-                Debug.Log(index.Item1 + " " + index.Item2);
                 return _minoPlacementArray[index.Item2, index.Item1];
             }
 
@@ -237,7 +248,7 @@ namespace Tetris
             }
 
             // 座標から配列のindexに変換するための値
-            // 左下の座標(-1.0f, -9.5f)をindex(1, 1)にする
+            // 左下の座標(-4.5f, -9.5f)をindex(1, 1)にする
             private const float kConvertOffsetX = 5.5f;
             private const float kConvertOffsetY = 10.5f;
             private System.Tuple<int, int> ConvertPosition2Index(float posX, float posY)

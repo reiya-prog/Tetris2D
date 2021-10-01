@@ -83,43 +83,36 @@ namespace Tetris
                 // Wキーor↑キー。現在のミノをすぐに真下に移動（ハードドロップ）
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.W)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => MoveHardDrop());
 
                 // Aキーor←キー。現在のミノを左に移動。
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.A)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => MoveLeft());
 
                 // Sキーor↓キー。現在のミノを下に移動。
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.S)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => MoveDown());
 
                 // Dキーor→キー。現在のミノを右に移動
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.D)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => MoveRight());
 
                 // Qキーor。左回転
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.Q)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => RotateLeft());
 
                 // Eキーor。右回転
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.E)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => RotateRight());
 
                 // LControlキーor。ホールド
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.LeftControl)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => HoldMino());
             }
 
@@ -210,6 +203,7 @@ namespace Tetris
 
             private void MoveDown()
             {
+                if (_isHeld || _isFixed) return;
                 // 自動落下を一時停止
                 CancelInvoke("MoveDownInvoke");
                 // 移動ができるのはホールド状態でなく設置状態でもない時
@@ -249,6 +243,7 @@ namespace Tetris
 
             private void MoveHardDrop()
             {
+                if (_isHeld || _isFixed) return;
                 // 自動落下を一時停止
                 CancelInvoke("MoveDownInvoke");
                 while (!CheckMovable(kMoveDownDirection))
@@ -302,12 +297,14 @@ namespace Tetris
             {
                 for (int i = 0; i < _componentBlock.Count; ++i)
                 {
-                    if(_componentBlock[i] == null) continue;
+                    if (_componentBlock[i] == null) continue;
                     if (_componentBlock[i].transform.position.y == positionY)
                     {
                         Destroy(_componentBlock[i]);
                         _componentBlock.RemoveAt(i);
-                    }else if(_componentBlock[i].transform.position.y > positionY){
+                    }
+                    else if (_componentBlock[i].transform.position.y > positionY)
+                    {
                         _componentBlock[i].transform.position -= kMoveDownDirection;
                     }
                 }
