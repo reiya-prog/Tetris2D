@@ -19,7 +19,7 @@ namespace Tetris
             private GameObject _rotationPivot;
             // ミノの構成ブロック
             // 0=upperBlock, 1=leftBlock, 2=rightBlock, 3=bottomBlock
-            private GameObject[] _componentBlock = new GameObject[4];
+            private List<GameObject> _componentBlock;
 
             // アタッチされているミノの種類
             [SerializeField]
@@ -33,21 +33,30 @@ namespace Tetris
             private int _levels = 1;
 
             // ホールド状態かどうか
-            private bool _isHold = false;
+            private bool _isHeld = false;
 
             // 設置済みかどうか
-            private bool _isStable = false;
+            private bool _isFixed = false;
 
             // このミノの一番左の座標
             private float _currentLeftPosition;
             // このミノの一番右の座標
             private float _currentRightPosition;
+            // このミノの一番上の座標
+            private float _currentUpperPosition;
+            // このミノの一番下の座標
+            private float _currentBottomPosition;
 
             // 座標周りの定数
             // 左端の座標
             private const float kMinPositionX = -4.5f;
             // 右端の座標
             private const float kMaxPositionX = 4.5f;
+            // 上端の座標
+            private const float kMaxPositionY = 10.5f;
+            // 下端の座標
+            private const float kMinPositionY = -9.5f;
+
             // 左方向の移動
             private readonly Vector3 kMoveLeftDirection = new Vector3(-1.0f, 0.0f, 0.0f);
             // 右方向の移動
@@ -61,10 +70,11 @@ namespace Tetris
             {
                 // メンバ変数の初期化
                 _rotationPivot = this.transform.GetChild(0).gameObject;
-                _componentBlock[0] = _rotationPivot.transform.GetChild(0).gameObject;
-                _componentBlock[1] = _rotationPivot.transform.GetChild(1).gameObject;
-                _componentBlock[2] = _rotationPivot.transform.GetChild(2).gameObject;
-                _componentBlock[3] = _rotationPivot.transform.GetChild(3).gameObject;
+                _componentBlock = new List<GameObject>();
+                _componentBlock.Add(_rotationPivot.transform.GetChild(0).gameObject);
+                _componentBlock.Add(_rotationPivot.transform.GetChild(1).gameObject);
+                _componentBlock.Add(_rotationPivot.transform.GetChild(2).gameObject);
+                _componentBlock.Add(_rotationPivot.transform.GetChild(3).gameObject);
             }
 
             private void Start()
@@ -73,58 +83,57 @@ namespace Tetris
                 // Wキーor↑キー。現在のミノをすぐに真下に移動（ハードドロップ）
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.W)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => MoveHardDrop());
 
                 // Aキーor←キー。現在のミノを左に移動。
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.A)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => MoveLeft());
 
                 // Sキーor↓キー。現在のミノを下に移動。
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.S)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => MoveDown());
 
                 // Dキーor→キー。現在のミノを右に移動
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.D)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => MoveRight());
 
                 // Qキーor。左回転
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.Q)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => RotateLeft());
 
                 // Eキーor。右回転
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.E)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => RotateRight());
 
                 // LControlキーor。ホールド
                 this.UpdateAsObservable()
                     .Where(_ => (Input.GetKeyDown(KeyCode.LeftControl)))
-                    .BatchFrame(0, FrameCountType.FixedUpdate)
                     .Subscribe(_ => HoldMino());
             }
 
-            private void SetLeftRightPosition()
+            private void SetMinoPosition()
             {
-                // 左端は最大値で初期化、右端は最小値で初期化しておく。
+                // 左端と上端は最大値で初期化、右端と下端は最小値で初期化しておく。
                 float minLeft = kMaxPositionX;
                 float maxRight = kMinPositionX;
-                for (int i = 0; i < _componentBlock.Length; ++i)
+                float minUpper = kMaxPositionX;
+                float maxBottom = kMinPositionX;
+                for (int i = 0; i < _componentBlock.Count; ++i)
                 {
                     minLeft = Mathf.Min(minLeft, _componentBlock[i].transform.position.x);
                     maxRight = Mathf.Max(maxRight, _componentBlock[i].transform.position.x);
+                    minUpper = Mathf.Min(minUpper, _componentBlock[i].transform.position.y);
+                    maxBottom = Mathf.Max(maxBottom, _componentBlock[i].transform.position.y);
                 }
                 _currentLeftPosition = minLeft;
                 _currentRightPosition = maxRight;
+                _currentUpperPosition = minUpper;
+                _currentBottomPosition = maxBottom;
             }
 
             // 現在のレベルを基に落下速度用の値に変換
@@ -136,7 +145,7 @@ namespace Tetris
 
             public void StartMoveMino()
             {
-                SetLeftRightPosition();
+                SetMinoPosition();
                 // this._levels = .GetComponent<>().GetCurrentLevels();
                 // levelsに合わせて落下時間を設定。最高速度は1fに1マス落下
                 float repeatRate = _maxFlameRate / FixedLevel();
@@ -146,8 +155,9 @@ namespace Tetris
 
             public void HoldMino()
             {
+                if (_isHeld || _isFixed) return;
                 if (!_minoManager.GetComponent<MinoController>().canHoldMino()) return;
-                _isHold = true;
+                _isHeld = true;
                 CancelInvoke("MoveDownInvoke");
                 _minoManager.GetComponent<MinoController>().HoldMino();
             }
@@ -160,7 +170,7 @@ namespace Tetris
                 if (direction.y == 1.0f || direction.z != 0.0f) return true;
                 bool retFlag = false;
                 // どこか一か所でもミノが存在(CheckMinoPlacementがtrue)の場合は移動できない
-                for (int i = 0; i < _componentBlock.Length; ++i)
+                for (int i = 0; i < _componentBlock.Count; ++i)
                 {
                     Vector3 checkPosition = _componentBlock[i].transform.position;
                     checkPosition += direction;
@@ -172,39 +182,42 @@ namespace Tetris
             private void MoveLeft()
             {
                 // 移動ができるのはホールド状態でなく設置状態でもない時
-                if (_isHold || _isStable) return;
+                if (_isHeld || _isFixed) return;
                 // 左に壁かミノがある場合移動できない
                 if (CheckMovable(kMoveLeftDirection)) return;
                 Vector3 newMinoPosition = this.gameObject.transform.position + kMoveLeftDirection;
                 this.gameObject.transform.position = newMinoPosition;
-                SetLeftRightPosition();
+                SetMinoPosition();
             }
 
             private void MoveRight()
             {
                 // 移動ができるのはホールド状態でなく設置状態でもない時
-                if (_isHold || _isStable) return;
+                if (_isHeld || _isFixed) return;
                 // 右に壁かミノがある場合移動できない
                 if (CheckMovable(kMoveRightDirection)) return;
                 Vector3 newMinoPosition = this.gameObject.transform.position + kMoveRightDirection;
                 this.gameObject.transform.position = newMinoPosition;
-                SetLeftRightPosition();
+                SetMinoPosition();
             }
 
             private void MoveDown()
             {
+                if (_isHeld || _isFixed) return;
                 // 自動落下を一時停止
                 CancelInvoke("MoveDownInvoke");
                 // 移動ができるのはホールド状態でなく設置状態でもない時
-                if (_isHold || _isStable) return;
+                if (_isHeld || _isFixed) return;
                 // これ以上下に移動できない場合、その位置にミノを固定する
-                if(CheckMovable(kMoveDownDirection)){
+                if (CheckMovable(kMoveDownDirection))
+                {
+                    FixMino();
                     return;
                 }
                 // ミノを1マス落とす
                 Vector3 newMinoPosition = this.gameObject.transform.position + kMoveDownDirection;
-                // 自動落下を再開
                 this.gameObject.transform.position = newMinoPosition;
+                // 自動落下を再開
                 float repeatRate = _maxFlameRate / FixedLevel();
                 repeatRate = Mathf.Max(repeatRate, 1.0f);
                 Invoke("MoveDownInvoke", repeatRate / _maxFlameRate);
@@ -214,7 +227,9 @@ namespace Tetris
             private void MoveDownInvoke()
             {
                 // これ以上下に移動できない場合、その位置にミノを固定する
-                if(CheckMovable(kMoveDownDirection)){
+                if (CheckMovable(kMoveDownDirection))
+                {
+                    FixMino();
                     return;
                 }
                 // ミノを1マス落とす
@@ -228,30 +243,72 @@ namespace Tetris
 
             private void MoveHardDrop()
             {
-
+                if (_isHeld || _isFixed) return;
+                // 自動落下を一時停止
+                CancelInvoke("MoveDownInvoke");
+                while (!CheckMovable(kMoveDownDirection))
+                {
+                    // ミノを1マス落とす
+                    Vector3 newMinoPosition = this.gameObject.transform.position + kMoveDownDirection;
+                    this.gameObject.transform.position = newMinoPosition;
+                }
+                FixMino();
             }
 
+            // z軸中心に90°回転
             private void RotateLeft()
             {
                 // 回転ができるのはホールド状態でなく設置状態でもない時
-                if (_isHold || _isStable) return;
+                if (_isHeld || _isFixed) return;
                 // 回転中心オブジェクトをもとにz軸に90°回転
                 _rotationPivot.transform.Rotate(transform.forward, 90);
-                SetLeftRightPosition();
+                // もし回転で左右の壁を越えてしまった場合はぶつからない位置まで横移動
+
+                SetMinoPosition();
+            }
+
+            // z軸中心に-90°回転
+            private void RotateRight()
+            {
+                // 回転ができるのはホールド状態でなく設置状態でもない時
+                if (_isHeld || _isFixed) return;
+                // 回転中心オブジェクトをもとにz軸に-90°回転
+                _rotationPivot.transform.Rotate(transform.forward, -90);
+                SetMinoPosition();
                 // もし回転で左右の壁を越えてしまった場合はぶつからない位置まで横移動
 
             }
 
-            // z軸に-90°
-            private void RotateRight()
+            // ミノを固定する関数
+            public void FixMino()
             {
-                // 回転ができるのはホールド状態でなく設置状態でもない時
-                if (_isHold || _isStable) return;
-                // 回転中心オブジェクトをもとにz軸に-90°回転
-                _rotationPivot.transform.Rotate(transform.forward, -90);
-                SetLeftRightPosition();
-                // もし回転で左右の壁を越えてしまった場合はぶつからない位置まで横移動
+                // 固定フラグを建てる
+                this._isFixed = true;
+                // 設置したミノの座標からPlacementフラグを建てる
+                for (int i = 0; i < _componentBlock.Count; ++i)
+                {
+                    Vector3 fixedPosition = _componentBlock[i].transform.position;
+                    _minoManager.GetComponent<MinoController>().SetMinoPlacement(fixedPosition);
+                }
+                _minoManager.GetComponent<MinoController>().FixMino(_currentBottomPosition, _currentUpperPosition);
+            }
 
+            public bool DestroyMino(float positionY)
+            {
+                for (int i = 0; i < _componentBlock.Count; ++i)
+                {
+                    if (_componentBlock[i] == null) continue;
+                    if (_componentBlock[i].transform.position.y == positionY)
+                    {
+                        Destroy(_componentBlock[i]);
+                        _componentBlock.RemoveAt(i);
+                    }
+                    else if (_componentBlock[i].transform.position.y > positionY)
+                    {
+                        _componentBlock[i].transform.position -= kMoveDownDirection;
+                    }
+                }
+                return _componentBlock.Count != 0 ? false : true;
             }
 
             public void SetMinoManager(GameObject minoManager)
